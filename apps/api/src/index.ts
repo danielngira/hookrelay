@@ -1,8 +1,8 @@
 import { randomUUID, createHash } from "node:crypto";
 import cors from "cors";
 import express from "express";
-import { z } from "zod";
 import { MAX_EVENT_BYTES, calculateRunMetrics } from "@hookrelay/core";
+import { eventSchema, runSchema } from "./validation.js";
 import { pool } from "./db.js";
 import { deliveryQueue } from "./queue.js";
 import { newOutboxId, startOutboxDispatcher } from "./outbox.js";
@@ -15,12 +15,6 @@ app.use((req, res, next) => {
   res.on("finish", () => console.log(JSON.stringify({ method: req.method, path: req.path, status: res.statusCode, durationMs: Math.round(performance.now() - started) })));
   next();
 });
-
-const eventSchema = z.object({
-  type: z.string().min(1).max(200),
-  payload: z.record(z.unknown()),
-  destinationIds: z.array(z.string().min(1)).min(1).max(20),
-}).strict();
 
 app.get("/health", async (_req, res) => {
   try { await pool.query("SELECT 1"); res.json({ status: "ok", database: "connected" }); }
@@ -85,9 +79,7 @@ app.post("/api/events", async (req, res, next) => {
 });
 
 app.post("/api/runs", async (req,res,next) => {
-  const input = z.object({ scenario:z.string().min(1).max(100), destinationIds:z.array(z.string()).min(1).max(6),
-    eventCount:z.number().int().min(1).max(500), concurrency:z.number().int().min(1).max(50),
-    maxP95Ms:z.number().int().min(1).max(60000).default(1000),maxErrorRate:z.number().min(0).max(100).default(5) }).safeParse(req.body);
+  const input = runSchema.safeParse(req.body);
   if (!input.success) return res.status(400).json({error:"Invalid run settings",details:input.error.flatten()});
   const client=await pool.connect();
   try {
