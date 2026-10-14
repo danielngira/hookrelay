@@ -8,8 +8,10 @@ import { deliveryQueue } from "./queue.js";
 import { newOutboxId, startOutboxDispatcher } from "./outbox.js";
 
 const app = express();
+app.set("etag", false);
 app.use(cors());
 app.use(express.json({ limit: `${MAX_EVENT_BYTES}b` }));
+app.use("/api", (_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); });
 app.use((req, res, next) => {
   const started = performance.now();
   res.on("finish", () => console.log(JSON.stringify({ method: req.method, path: req.path, status: res.statusCode, durationMs: Math.round(performance.now() - started) })));
@@ -69,7 +71,7 @@ app.post("/api/events", async (req, res, next) => {
     const deliveryIds: string[] = [];
     for (const destinationId of body.destinationIds) {
       const deliveryId = randomUUID(); deliveryIds.push(deliveryId);
-      await client.query("INSERT INTO deliveries (id,event_id,destination_id) VALUES ($1,$2,$3)", [deliveryId, eventId, destinationId]);
+      await client.query("INSERT INTO deliveries (id,event_id,destination_id,status) VALUES ($1,$2,$3,'queued')", [deliveryId, eventId, destinationId]);
       await client.query("INSERT INTO outbox (id,delivery_id) VALUES ($1,$2)", [newOutboxId(), deliveryId]);
     }
     await client.query("COMMIT");
@@ -93,7 +95,7 @@ app.post("/api/runs", async (req,res,next) => {
       await client.query("INSERT INTO events(id,run_id,event_type,payload,idempotency_key,request_hash) VALUES($1,$2,$3,$4,$5,$6)",
         [eventId,runId,"demo.performance_check",JSON.stringify({sequence:i+1,scenario:input.data.scenario,generatedAt:new Date().toISOString()}),`run:${runId}:${i}`,"run-generated"]);
       for(const destinationId of input.data.destinationIds){const deliveryId=randomUUID();
-        await client.query("INSERT INTO deliveries(id,event_id,destination_id) VALUES($1,$2,$3)",[deliveryId,eventId,destinationId]);
+        await client.query("INSERT INTO deliveries(id,event_id,destination_id,status) VALUES($1,$2,$3,'queued')",[deliveryId,eventId,destinationId]);
         await client.query("INSERT INTO outbox(id,delivery_id) VALUES($1,$2)",[newOutboxId(),deliveryId]);}
     }
     await client.query("COMMIT");
@@ -188,7 +190,7 @@ app.post("/api/deliveries/:id/replay", async (req, res, next) => {
     if (!rows.length) { await client.query("ROLLBACK"); return res.status(404).json({ error: "Delivery not found" }); }
     const source = rows[0];
     const id = randomUUID();
-    await client.query(`INSERT INTO deliveries (id,event_id,destination_id,replayed_from_delivery_id) VALUES ($1,$2,$3,$4)`, [id, source.event_id, source.destination_id, source.id]);
+    await client.query(`INSERT INTO deliveries (id,event_id,destination_id,replayed_from_delivery_id,status) VALUES ($1,$2,$3,$4,'queued')`, [id, source.event_id, source.destination_id, source.id]);
     await client.query("INSERT INTO outbox (id,delivery_id) VALUES ($1,$2)", [newOutboxId(), id]);
     await client.query("COMMIT");
     res.status(202).json({ deliveryId: id, replayedFrom: source.id });
