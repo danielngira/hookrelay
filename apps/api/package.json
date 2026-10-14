@@ -1,0 +1,26 @@
+{
+  "name": "@hookrelay/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "migrate": "tsx src/migrate.ts",
+    "start": "tsx src/index.ts",
+    "build": "tsc --noEmit -p tsconfig.json",
+    "test": "node --import tsx --test src/*.test.ts"
+  },
+  "dependencies": {
+    "@hookrelay/core": "0.1.0",
+    "bullmq": "^5.56.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "pg": "^8.16.0",
+    "zod": "^3.25.49"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/pg": "^8.15.4"
+  }
+}

@@ -1,0 +1,71 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: hookrelay
+      POSTGRES_PASSWORD: hookrelay
+      POSTGRES_DB: hookrelay
+    ports: ["5432:5432"]
+    volumes: ["postgres_data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hookrelay -d hookrelay"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  migrate:
+    build: .
+    command: ["npm", "run", "migrate", "--workspace", "@hookrelay/api"]
+    environment: &app-env
+      DATABASE_URL: postgres://hookrelay:hookrelay@postgres:5432/hookrelay
+      REDIS_HOST: redis
+      APP_ENCRYPTION_KEY: "hookrelay-local-demo-key-32-byte"
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: "no"
+  api:
+    build: .
+    command: ["npm", "run", "start", "--workspace", "@hookrelay/api"]
+    environment:
+      <<: *app-env
+      API_PORT: 4000
+      PG_POOL_SIZE: 20
+    ports: ["4000:4000"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  worker:
+    build: .
+    command: ["npm", "run", "start", "--workspace", "@hookrelay/worker"]
+    environment: *app-env
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+  receiver:
+    build: .
+    command: ["npm", "run", "start", "--workspace", "@hookrelay/receiver"]
+    environment: *app-env
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+  web:
+    build: .
+    command: ["npm", "run", "dev", "--workspace", "@hookrelay/web", "--", "--host", "0.0.0.0"]
+    environment:
+      API_PROXY_TARGET: http://api:4000
+    ports: ["5173:5173"]
+    depends_on:
+      api: { condition: service_healthy }
+volumes:
+  postgres_data:
