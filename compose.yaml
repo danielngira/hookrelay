@@ -26,7 +26,7 @@ services:
     environment: &app-env
       DATABASE_URL: postgres://hookrelay:hookrelay@postgres:5432/hookrelay
       REDIS_HOST: redis
-      APP_ENCRYPTION_KEY: 00000000000000000000000000000000
+      APP_ENCRYPTION_KEY: "hookrelay-local-demo-key-32-byte"
     depends_on:
       postgres: { condition: service_healthy }
     restart: "no"
