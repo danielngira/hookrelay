@@ -44,6 +44,8 @@ CREATE TABLE IF NOT EXISTS deliveries (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE deliveries ALTER COLUMN status SET DEFAULT 'queued';
+
 CREATE INDEX IF NOT EXISTS deliveries_status_updated_idx ON deliveries(status, updated_at DESC);
 CREATE INDEX IF NOT EXISTS deliveries_destination_status_idx ON deliveries(destination_id, status, created_at DESC);
 CREATE INDEX IF NOT EXISTS deliveries_event_idx ON deliveries(event_id);
